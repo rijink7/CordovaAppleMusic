@@ -1,27 +1,59 @@
 {
-  "name": "cordova-plugin-applemusic",
-  "version": "1.2.13",
-  "description": "Cordova Apple Music",
+  "_from": "cordova-plugin-applemusic",
+  "_id": "cordova-plugin-applemusic@1.3.3",
+  "_inBundle": false,
+  "_integrity": "sha512-eApqSrERIKYJoKO4Edi/m0KHIKoAtbqewtKroNMzst9coRfoC1V6U9STfr0dF6xBG8VX4pAFZqaYuRMXYj+Gzw==",
+  "_location": "/cordova-plugin-applemusic",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "cordova-plugin-applemusic",
+    "name": "cordova-plugin-applemusic",
+    "escapedName": "cordova-plugin-applemusic",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/cordova-plugin-applemusic/-/cordova-plugin-applemusic-1.3.3.tgz",
+  "_shasum": "a55ef2f8d76b1d027624ec8c9c434d3414f4218d",
+  "_spec": "cordova-plugin-applemusic",
+  "_where": "/Users/afscdev/Desktop/bitbucket/Deepr/ios",
+  "author": {
+    "name": "khevamann"
+  },
+  "bugs": {
+    "url": "https://github.com/khevamann/CordovaAppleMusic/issues"
+  },
+  "bundleDependencies": false,
   "cordova": {
     "id": "cordova-plugin-applemusic",
     "platforms": [
       "ios"
     ]
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/khevamann/CordovaAppleMusic.git"
-  },
-  "keywords": [
-    "ecosystem:cordova",
-    "cordova-ios"
-  ],
+  "deprecated": false,
+  "description": "Cordova Apple Music",
   "engines": [
     {
       "name": "cordova",
       "version": ">=3.4.0"
     }
   ],
-  "author": "khevamann",
-  "license": "ISC"
+  "homepage": "https://github.com/khevamann/CordovaAppleMusic#readme",
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-ios"
+  ],
+  "license": "ISC",
+  "name": "cordova-plugin-applemusic",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khevamann/CordovaAppleMusic.git"
+  },
+  "version": "1.3.3"
 }

@@ -12,9 +12,9 @@
     NSString* callbackId = [command callbackId];
     
     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-    [notificationCenter addObserver:self selector:@selector(handlePlaybackStateChanged:) name:MPMusicPlayerControllerPlaybackStateDidChangeNotification object:[MPMusicPlayerController systemMusicPlayer]];
+    [notificationCenter addObserver:self selector:@selector(handlePlaybackStateChanged:) name:MPMusicPlayerControllerPlaybackStateDidChangeNotification object:[MPMusicPlayerController applicationMusicPlayer]];
     
-    [[MPMusicPlayerController systemMusicPlayer] beginGeneratingPlaybackNotifications];
+    [[MPMusicPlayerController applicationMusicPlayer] beginGeneratingPlaybackNotifications];
     
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:YES];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -26,7 +26,7 @@
     
     SKCloudServiceAuthorizationStatus status = [SKCloudServiceController authorizationStatus];
     
-    int res = -1;
+    __block int res = -1;
     CDVCommandStatus callbackStatus = CDVCommandStatus_OK;
     
     switch (status){
@@ -36,9 +36,23 @@
         case SKCloudServiceAuthorizationStatusRestricted: res = 3; break;
         default: callbackStatus = CDVCommandStatus_ERROR;
     }
-    
-    CDVPluginResult* result = [CDVPluginResult resultWithStatus:callbackStatus messageAsInt:res];
-    [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+    SKCloudServiceController *cloudServiceController = [[SKCloudServiceController alloc] init];
+    [cloudServiceController requestCapabilitiesWithCompletionHandler:^(SKCloudServiceCapability capabilities, NSError * _Nullable error) {
+        if(res==2)
+        {
+        if (capabilities & SKCloudServiceCapabilityMusicCatalogPlayback) {
+            // The user has an active subscription
+            NSLog(@"The user has an active subscription");
+             res = 2;
+        } else {
+            // The user does *not* have an active subscription
+            NSLog(@"The user does *not* have an active subscription");
+             res = 5;
+        }
+        };
+        CDVPluginResult* result = [CDVPluginResult resultWithStatus:callbackStatus messageAsInt:res];
+        [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+    }];
 }
 
 - (void)requestAuthorization:(CDVInvokedUrlCommand*)command
@@ -47,17 +61,20 @@
     [SKCloudServiceController requestAuthorization:^(SKCloudServiceAuthorizationStatus status) {
         SKCloudServiceController *cloudServiceController = [[SKCloudServiceController alloc] init];
         [cloudServiceController requestCapabilitiesWithCompletionHandler:^(SKCloudServiceCapability capabilities, NSError * _Nullable error) {
-            bool isCapable = (capabilities >= SKCloudServiceCapabilityMusicCatalogPlayback);
+            bool isCapable = (capabilities >= SKCloudServiceCapabilityMusicCatalogSubscriptionEligible && capabilities >= SKCloudServiceCapabilityMusicCatalogPlayback);
             CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:isCapable];
             [self.commandDelegate sendPluginResult:result callbackId:callbackId];
         }];
     }];
 }
+
+
+
 - (void)playTrack:(CDVInvokedUrlCommand*)command
 {
     NSString* callbackId = [command callbackId];
     NSString* trackId = [[command arguments] objectAtIndex:0];
-    MPMusicPlayerController *musicPlayer = [MPMusicPlayerController systemMusicPlayer];
+    MPMusicPlayerController *musicPlayer = [MPMusicPlayerController applicationMusicPlayer];
     [musicPlayer setQueueWithStoreIDs:@[trackId]];
     [musicPlayer play];
 
@@ -219,7 +236,7 @@
 {
     NSString* callbackId = [command callbackId];
 
-    NSNumber *duration = [[MPMusicPlayerController systemMusicPlayer].nowPlayingItem valueForProperty:MPMediaItemPropertyPlaybackDuration];
+    NSNumber *duration = [[MPMusicPlayerController applicationMusicPlayer].nowPlayingItem valueForProperty:MPMediaItemPropertyPlaybackDuration];
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:[duration doubleValue]];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -229,7 +246,7 @@
 {
     NSString* callbackId = [command callbackId];
 
-    double position = [MPMusicPlayerController systemMusicPlayer].currentPlaybackTime;
+    double position = [MPMusicPlayerController applicationMusicPlayer].currentPlaybackTime;
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble: position];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -243,7 +260,9 @@
     NSArray *Songs= [[command arguments] objectAtIndex:1];
 
     [[MPMediaLibrary defaultMediaLibrary] getPlaylistWithUUID:uuid creationMetadata:[[MPMediaPlaylistCreationMetadata alloc] initWithName:PlayListName] completionHandler:^(MPMediaPlaylist * _Nullable playlist, NSError * _Nullable error){
-        NSString *playlistId = [uuid UUIDString];
+        NSString *PlaylistName= [playlist valueForProperty: MPMediaPlaylistPropertyName];
+        NSNumber *PlaylistId= [playlist valueForProperty: MPMediaPlaylistPropertyPersistentID];
+        NSString *numStr = [NSString stringWithFormat:@"%lld", [PlaylistId unsignedLongLongValue]];
         if(error){
             CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error.description];
             [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -254,7 +273,10 @@
                         CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error1.description];
                         [self.commandDelegate sendPluginResult:result callbackId:callbackId];
                         }else{
-                        CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"Successfully added"];
+                            NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
+                            dict[@"id"] = numStr;
+                            dict[@"name"] = PlaylistName;
+                        CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dict];
                         [self.commandDelegate sendPluginResult:result callbackId:callbackId];
                     };
 
@@ -266,15 +288,16 @@
 
 - (void)addSongtoPlayList:(CDVInvokedUrlCommand*)command
 {
-   NSString* callbackId = [command callbackId];
-    NSNumber* MyPlaylistID= [[command arguments] objectAtIndex:0];
+    NSString* callbackId = [command callbackId];
+    NSString* paramId= [[command arguments] objectAtIndex:0];
+    NSNumber* MyPlaylistID = [NSNumber numberWithLongLong: [paramId longLongValue]];
     NSString* song= [[command arguments] objectAtIndex:1];
 
     MPMediaPropertyPredicate *predicate=[MPMediaPropertyPredicate predicateWithValue:MyPlaylistID forProperty:MPMediaPlaylistPropertyPersistentID];
-    MPMediaQuery *PlayListSongsQuery= [MPMediaQuery playlistsQuery];
+    MPMediaQuery *PlayListQuery= [MPMediaQuery playlistsQuery];
 
-    [PlayListSongsQuery addFilterPredicate:predicate];
-    NSArray *playlists = [PlayListSongsQuery collections];
+    [PlayListQuery addFilterPredicate:predicate];
+    NSArray *playlists = [PlayListQuery collections];
     MPMediaPlaylist*My_Playlist;
     if(playlists.count>0){
         My_Playlist=[playlists objectAtIndex:0];
@@ -310,8 +333,6 @@
         NSString *PlaylistName= [playlist valueForProperty: MPMediaPlaylistPropertyName];
         NSNumber * PlaylistID= [playlist valueForProperty: MPMediaPlaylistPropertyPersistentID];
         NSString *numStr = [NSString stringWithFormat:@"%lld", [PlaylistID unsignedLongLongValue]];
-        //NSLog(@"%@", numStr);
-        // NSString *PLID= [ ];
         NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
         dict[@"name"] = PlaylistName;
         dict[@"id"]= numStr;
@@ -365,7 +386,7 @@
 {
     NSString* callbackId = [command callbackId];
 
-    [[MPMusicPlayerController systemMusicPlayer] play];
+    [[MPMusicPlayerController applicationMusicPlayer] play];
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -375,7 +396,7 @@
 {
     NSString* callbackId = [command callbackId];
 
-    [[MPMusicPlayerController systemMusicPlayer] pause];
+    [[MPMusicPlayerController applicationMusicPlayer] pause];
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -385,7 +406,7 @@
 {
     NSString* callbackId = [command callbackId];
 
-    [[MPMusicPlayerController systemMusicPlayer] stop];
+    [[MPMusicPlayerController applicationMusicPlayer] stop];
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -397,7 +418,7 @@
 
     NSString* seekTime = [[command arguments] objectAtIndex:0];
 
-    [[MPMusicPlayerController systemMusicPlayer] setCurrentPlaybackTime: seekTime.doubleValue];
+    [[MPMusicPlayerController applicationMusicPlayer] setCurrentPlaybackTime: seekTime.doubleValue];
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -405,10 +426,13 @@
 
 - (void)handlePlaybackStateChanged:(NSNotification*)notification
 {
-    MPMusicPlaybackState state = [MPMusicPlayerController systemMusicPlayer].playbackState;
-    if (state == MPMusicPlaybackStateStopped || state == MPMusicPlaybackStateInterrupted || state == MPMusicPlaybackStatePaused) {
+    MPMusicPlaybackState state = [MPMusicPlayerController applicationMusicPlayer].playbackState;
+    NSLog(@"Display very Long: %lld", state);
+    if (state == MPMusicPlaybackStateStopped || state == MPMusicPlaybackStateInterrupted ) {
         [self.commandDelegate evalJs:@"window.appleMusicPluginStopped()"];
-        } else if (state == MPMusicPlaybackStateSeekingForward || state == MPMusicPlaybackStateSeekingBackward) {
+        }else if (state == MPMusicPlaybackStatePaused) {
+        [self.commandDelegate evalJs:@"window.appleMusicPluginPaused()"];
+        }else if (state == MPMusicPlaybackStateSeekingForward || state == MPMusicPlaybackStateSeekingBackward) {
         [self.commandDelegate evalJs:@"window.appleMusicPluginSeeked()"];
         } else if (state == MPMusicPlaybackStatePlaying) {
         [self.commandDelegate evalJs:@"window.appleMusicPluginPlaying()"];
